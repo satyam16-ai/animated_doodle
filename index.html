@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- We relax CSP for dev/wasm; unsafe-eval is typically needed for some wasm/bundler logic -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net ws://localhost:*;">
+    <title>Munna Monitor</title>
+</head>
+
+<body>
+    <div id="app">
+        <!-- Sidebar: Settings & Configuration -->
+        <aside id="studio-sidebar">
+            <div class="sidebar-header">
+                <h1>🎬 Munna Monitor</h1>
+                <div class="version-badge">Creator Studio</div>
+            </div>
+
+            <!-- TAB 1: STUDIO CONTROLS (Existing) -->
+            <div class="settings-group">
+                <h3>🎙️ Studio</h3>
+                <div class="control-item">
+                    <label>Microphone</label>
+                    <select id="audio-source"></select>
+                </div>
+                <div class="audio-meter">
+                    <div id="voice-bar"></div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>📺 Output</h3>
+                <div class="control-item">
+                    <label>Resolution</label>
+                    <select id="resolution-select">
+                        <option value="1280x720">720p (HD)</option>
+                        <option value="1920x1080" selected>1080p (Full HD)</option>
+                        <option value="2560x1440">1440p (2K)</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label>Background</label>
+                    <select id="background-select">
+                        <option value="gradient" selected>Gradient (Purple)</option>
+                        <option value="solid-dark">Solid Dark</option>
+                        <option value="green">Green Screen</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- TAB 2: AVATAR CREATOR (New) -->
+            <div class="settings-group">
+                <h3>🎨 Avatar Creator</h3>
+
+                <div class="control-item">
+                    <label>Colors</label>
+                    <div class="color-grid">
+                        <input type="color" id="color-skin" value="#f3d6b9" title="Skin">
+                        <input type="color" id="color-hair" value="#2d3436" title="Hair">
+                        <input type="color" id="color-shirt" value="#6c5ce7" title="Shirt">
+                        <input type="color" id="color-headphones" value="#e17055" title="Headphones">
+                    </div>
+                </div>
+
+                <div class="control-item">
+                    <label>Hair Style</label>
+                    <select id="style-hair">
+                        <option value="quiff">Textured Quiff</option>
+                        <option value="messy">Messy</option>
+                        <option value="bald">Bald</option>
+                    </select>
+                </div>
+
+                <div class="control-item">
+                    <label>Glasses</label>
+                    <select id="style-glasses">
+                        <option value="tech">Tech Rectangular</option>
+                        <option value="round">Round Retro</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+
+                <div class="control-item">
+                    <label>Headphones</label>
+                    <select id="style-headphones">
+                        <option value="none">None</option>
+                        <option value="over-ear">Over-Ear</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3>🎨 Environment</h3>
+                <div class="control-item">
+                    <label>Background</label>
+                    <select id="background-select">
+                        <option value="gradient" selected>Gradient (Purple)</option>
+                        <option value="solid-dark">Solid Dark</option>
+                        <option value="solid-light">Solid Light</option>
+                        <option value="green">Green Screen</option>
+                        <option value="blue">Blue Screen</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-group debug-stats">
+                <h3>📊 Live Statistics</h3>
+                <div class="stat-row">
+                    <span>FPS:</span>
+                    <span id="fps">0</span>
+                </div>
+                <div class="stat-row">
+                    <span>Viseme:</span>
+                    <span id="debug-viseme" class="highlight">REST</span>
+                </div>
+                <!-- Status element integrated here for compactness -->
+                <div id="status" class="status-text">Initializing...</div>
+            </div>
+
+            <!-- Hidden Elements kept for functionality -->
+            <div id="avatar-info" style="display: none;"></div>
+            <div id="debug-audio" style="display: none;"></div>
+        </aside>
+
+        <!-- Main Stage: Avatar & Preview -->
+        <main id="studio-stage">
+            <canvas id="output-canvas"></canvas>
+
+            <!-- Floating Webcam Preview -->
+            <div id="preview-container">
+                <video id="input-video" autoplay muted playsinline></video>
+                <canvas id="skeleton-canvas"></canvas>
+                <div id="preview-toggle">
+                    <label><input type="checkbox" id="show-preview" checked> Show Webcam</label>
+                </div>
+            </div>
+
+            <!-- Bottom Recording Dock -->
+            <div id="recording-dock">
+                <button id="btn-start-record" class="dock-btn record-btn">
+                    <span class="icon">●</span> Start Recording
+                </button>
+                <div class="divider"></div>
+                <button id="btn-stop-record" class="dock-btn stop-btn" disabled>
+                    <span class="icon">■</span> Stop
+                </button>
+                <button id="btn-export" class="dock-btn export-btn" disabled>
+                    <span class="icon">💾</span> Export Video
+                </button>
+            </div>
+        </main>
+    </div>
+    <script type="module" src="/src/renderer/renderer.ts"></script>
+</body>
+
+</html>
