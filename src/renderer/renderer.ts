@@ -1,6 +1,7 @@
 import './styles/index.css'
 import { FaceTracker } from './engine/FaceTracker';
 import { AvatarRenderer } from './engine/AvatarRenderer';
+import { Avatar3DRenderer } from './engine/Avatar3DRenderer';
 import { AudioAnalyzer } from './engine/AudioAnalyzer';
 import { AvatarStateEngine } from './engine/AvatarStateEngine';
 import { Recorder } from './engine/Recorder';
@@ -38,11 +39,26 @@ async function init() {
         // Setup Avatar Renderer
         const avatarRenderer = new AvatarRenderer(canvasElement);
 
+        // Will be initialized later for mode switching
+        let currentMode: '2d' | '3d' = '2d';
+        let avatar3DRenderer: any = null;
+
         // Setup Face Tracker with skeleton overlay
         const tracker = new FaceTracker(videoElement, (faceState) => {
             stateEngine.updateFaceState(faceState);
             const finalState = stateEngine.getState();
-            avatarRenderer.updateState(finalState);
+
+            // Route to active renderer
+            if (currentMode === '2d') {
+                avatarRenderer.updateState(finalState);
+            } else if (avatar3DRenderer) {
+                avatar3DRenderer.updateState(finalState);
+                // Send viseme for lip sync
+                const visemeState = (finalState as any).viseme;
+                if (visemeState) {
+                    avatar3DRenderer.updateViseme(visemeState);
+                }
+            }
         }, skeletonCanvas);
 
         statusElement.innerText = "📷 Requesting Camera & Microphone...";
@@ -109,18 +125,53 @@ async function init() {
 
         // Wire up export settings
         const resolutionSelect = document.getElementById('resolution-select') as HTMLSelectElement;
+        const aspectRatioSelect = document.getElementById('aspect-ratio-select') as HTMLSelectElement;
         const backgroundSelect = document.getElementById('background-select') as HTMLSelectElement;
 
-        resolutionSelect.onchange = () => {
-            const [width, height] = resolutionSelect.value.split('x').map(Number);
+        // Function to apply aspect ratio
+        const applyAspectRatio = () => {
+            const [baseWidth, baseHeight] = resolutionSelect.value.split('x').map(Number);
+            const aspectRatio = aspectRatioSelect.value;
+
+            let width = baseWidth;
+            let height = baseHeight;
+
+            // Calculate dimensions based on aspect ratio
+            switch (aspectRatio) {
+                case '16:9':
+                    height = Math.round(width / 16 * 9);
+                    break;
+                case '9:16':
+                    width = Math.round(height / 16 * 9);
+                    break;
+                case '1:1':
+                    width = height = Math.min(width, height);
+                    break;
+                case '4:3':
+                    height = Math.round(width / 4 * 3);
+                    break;
+                case '21:9':
+                    height = Math.round(width / 21 * 9);
+                    break;
+            }
+
+            // Update both renderers
             avatarRenderer.setResolution(width, height);
-            console.log(`📐 Resolution changed to: ${width}x${height}`);
+            if (avatar3DRenderer) {
+                avatar3DRenderer.setResolution(width, height);
+            }
+
+            console.log(`📐 Resolution: ${width}x${height} (${aspectRatio})`);
         };
 
-
+        resolutionSelect.onchange = applyAspectRatio;
+        aspectRatioSelect.onchange = applyAspectRatio;
 
         backgroundSelect.onchange = () => {
             avatarRenderer.setBackground(backgroundSelect.value);
+            if (avatar3DRenderer) {
+                avatar3DRenderer.setBackground(backgroundSelect.value);
+            }
             console.log(`🎨 Background changed to: ${backgroundSelect.value}`);
         };
 
@@ -252,6 +303,82 @@ async function init() {
         }, { once: true });
 
         statusElement.innerText = "✅ Ready! Move your head and speak. (Click anywhere if audio is 0%)";
+
+        // ==================== 3D AVATAR MODE INTEGRATION ====================
+        const canvas3DElement = document.getElementById('output-canvas-3d') as HTMLCanvasElement;
+        avatar3DRenderer = new Avatar3DRenderer(canvas3DElement);
+        // currentMode already declared above
+
+        // Mode Switcher
+        const modeRadios = document.getElementsByName('avatar-mode') as NodeListOf<HTMLInputElement>;
+        const modelImportSection = document.getElementById('model-import-section')!;
+        const controls3DSection = document.getElementById('3d-controls-section')!;
+
+        modeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                currentMode = radio.value as '2d' | '3d';
+
+                // Show/hide appropriate canvas
+                if (currentMode === '3d') {
+                    canvasElement.style.display = 'none';
+                    canvas3DElement.style.display = 'block';
+                    modelImportSection.style.display = 'block';
+                    controls3DSection.style.display = 'block';
+                } else {
+                    canvasElement.style.display = 'block';
+                    canvas3DElement.style.display = 'none';
+                    modelImportSection.style.display = 'none';
+                    controls3DSection.style.display = 'none';
+                }
+            });
+        });
+
+        // 3D Model Import
+        const import3DBtn = document.getElementById('import-3d-btn')!;
+        const modelFileInput = document.getElementById('model-file-input') as HTMLInputElement;
+        const modelStatus = document.getElementById('model-status')!;
+
+        import3DBtn?.addEventListener('click', () => modelFileInput.click());
+
+        modelFileInput?.addEventListener('change', async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            modelStatus.textContent = `Loading: ${file.name}`;
+            modelStatus.className = 'model-status loading';
+
+            const success = await avatar3DRenderer.loadModel(file);
+
+            if (success) {
+                modelStatus.textContent = `✅ ${file.name}`;
+                modelStatus.className = 'model-status loaded';
+
+                // Show detection results
+                const faceDetectionStatus = document.getElementById('face-detection-status')!;
+                const landmarks = avatar3DRenderer.getLandmarks();
+
+                if (landmarks) {
+                    faceDetectionStatus.style.display = 'block';
+                    faceDetectionStatus.textContent = `✅ Face detected! ${landmarks.mouthVertices.length} mouth vertices found`;
+                } else {
+                    faceDetectionStatus.style.display = 'block';
+                    faceDetectionStatus.textContent = '⚠️ No face detected - Check console for details';
+                }
+            } else {
+                modelStatus.textContent = '❌ Failed';
+                modelStatus.className = 'model-status error';
+            }
+        });
+
+        // 3D Controls
+        document.getElementById('camera-distance')?.addEventListener('input', (e) => {
+            avatar3DRenderer.setCameraDistance(parseFloat((e.target as HTMLInputElement).value));
+        });
+        document.getElementById('light-intensity')?.addEventListener('input', (e) => {
+            avatar3DRenderer.setLightIntensity(parseFloat((e.target as HTMLInputElement).value));
+        });
+        document.getElementById('model-scale')?.addEventListener('input', (e) => {
+            avatar3DRenderer.setModelScale(parseFloat((e.target as HTMLInputElement).value));
+        });
 
     } catch (err) {
         console.error('Initialization error:', err);

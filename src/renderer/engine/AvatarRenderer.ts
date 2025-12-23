@@ -37,10 +37,18 @@ export class AvatarRenderer {
         mouth: { openness: 0, shape: 'closed' },
         eyes: { leftOpen: 1, rightOpen: 1, blink: false },
         position: { x: 0.5, y: 0.5 },
-        viseme: null
+        viseme: null,
+        emotion: 'neutral'
     };
 
-    private smoothState: FaceState = { ...this.state };
+    // Initialize smoothState with all required properties
+    private smoothState: FaceState = {
+        rotation: { x: 0, y: 0, z: 0 },
+        mouth: { openness: 0, shape: 'closed' },
+        eyes: { leftOpen: 1, rightOpen: 1, blink: false },
+        position: { x: 0.5, y: 0.5 },
+        emotion: 'neutral'
+    };
     private frameCount = 0;
     private lastTime = performance.now();
     private fps = 0;
@@ -48,29 +56,29 @@ export class AvatarRenderer {
 
     // Export settings
     private targetResolution = { width: 1920, height: 1080 };
-    private aspectRatio = '16:9';
+
     private backgroundStyle = 'gradient';
 
     // Dynamic Configuration
     public config: AvatarConfig = {
         colors: {
-            skin: '#f3d6b9',
-            hair: '#2d3436',
-            shirt: '#6c5ce7',
-            glassesFrame: '#2d3436',
-            glassesLens: 'rgba(255, 255, 255, 0.1)',
-            headphones: '#e17055', // Stylish Orange/Salmon
+            skin: '#FFDFC4', // Warm light tone
+            hair: '#333333', // Dark charcoal/brown
+            shirt: '#3B3B98', // Tech blue shirt
+            glassesFrame: '#1A1A2E', // Navy/Black
+            glassesLens: 'rgba(255, 255, 255, 0.15)',
+            headphones: '#FF6B6B',
             eyeWhite: '#FFFFFF',
-            eyePupil: '#2d3436',
-            mouth: '#c08a79',
-            eyebrow: '#2d3436',
+            eyePupil: '#000000',
+            mouth: '#4A4A4A', // Dark gray for outlines
+            eyebrow: '#333333',
         },
         style: {
-            faceShape: 'oval',
-            hairStyle: 'quiff',
+            faceShape: 'square', // Soft rounded square
+            hairStyle: 'messy', // Tech messy
             glasses: 'tech',
             headphones: 'none',
-            eyeShape: 'sharp'
+            eyeShape: 'round'
         }
     };
 
@@ -105,7 +113,6 @@ export class AvatarRenderer {
     }
 
     setAspectRatio(ratio: string) {
-        this.aspectRatio = ratio;
         const [w, h] = ratio.split(':').map(Number);
         const baseHeight = this.targetResolution.height;
         this.targetResolution.width = Math.round((baseHeight * w) / h);
@@ -150,6 +157,23 @@ export class AvatarRenderer {
         this.smoothState.mouth.openness = lerp(this.smoothState.mouth.openness, this.state.mouth.openness, 0.3);
         this.smoothState.eyes.leftOpen = lerp(this.smoothState.eyes.leftOpen, this.state.eyes.leftOpen, 0.2);
         this.smoothState.eyes.rightOpen = lerp(this.smoothState.eyes.rightOpen, this.state.eyes.rightOpen, 0.2);
+
+        // Update emotion directly (discrete state)
+        (this.smoothState as any).emotion = (this.state as any).emotion || 'neutral';
+        // Also ensure eyebrows exist in state
+        if (this.state.eyebrows) {
+            // (this.smoothState as any).eyebrows = this.state.eyebrows; // We do this better below or usage in draw
+            // Actually drawing uses passed eyebrows or accesses them. 
+            // Currently smoothState doesn't interpolate eyebrows, drawEyebrows uses 'eyebrows' from somewhere?
+        }
+        // Actually draw method accesses 'this.smoothState.eyebrows' but we never updated it here?
+        // Let's check draw(): const { rotation, mouth, eyes, eyebrows } = this.smoothState;
+        // So we MUST update eyebrows in smoothState!
+        if (this.state.eyebrows) {
+            if (!(this.smoothState as any).eyebrows) (this.smoothState as any).eyebrows = { left: 0, right: 0 };
+            (this.smoothState as any).eyebrows.left = lerp((this.smoothState as any).eyebrows?.left || 0, this.state.eyebrows.left, 0.2);
+            (this.smoothState as any).eyebrows.right = lerp((this.smoothState as any).eyebrows?.right || 0, this.state.eyebrows.right, 0.2);
+        }
 
         this.draw();
         requestAnimationFrame(this.loop.bind(this));
@@ -278,60 +302,66 @@ export class AvatarRenderer {
     private drawNeck() {
         this.ctx.save();
         this.ctx.fillStyle = this.colors.skin;
-        this.ctx.strokeStyle = this.colors.hair;
-        this.ctx.lineWidth = 3;
+        this.ctx.strokeStyle = '#2A2A2A'; // Dark gray outline
+        this.ctx.lineWidth = 4;
         this.ctx.lineJoin = 'round';
 
+        // Short tapered neck
         this.ctx.beginPath();
-        this.ctx.moveTo(-35, 130);
-        this.ctx.lineTo(-35, 200);
-        this.ctx.lineTo(35, 200);
-        this.ctx.lineTo(35, 130);
+        this.ctx.moveTo(-30, 140); // Top Left
+        this.ctx.lineTo(-25, 180); // Bottom Left (Tapered)
+        this.ctx.quadraticCurveTo(0, 185, 25, 180); // Bottom Curve
+        this.ctx.lineTo(30, 140); // Top Right
         this.ctx.closePath();
         this.ctx.fill();
         this.ctx.stroke();
+
+        // Shadow under chin
+        this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        this.ctx.beginPath();
+        this.ctx.moveTo(-30, 140);
+        this.ctx.quadraticCurveTo(0, 160, 30, 140);
+        this.ctx.fill();
+
         this.ctx.restore();
     }
 
     private drawHead() {
         this.ctx.save();
         this.ctx.fillStyle = this.colors.skin;
-        this.ctx.strokeStyle = '#e0c0a0'; // Subtle outline
-        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = '#2A2A2A';
+        this.ctx.lineWidth = 4;
         this.ctx.lineJoin = 'round';
 
-        // Jawline movement based on head rotation
-        const jawOffset = (this.smoothState.rotation?.y || 0) * 10;
+        // Face Shape: Rounded Rectangle / Soft Oval
+        // W: 190, H: 240 (proportions)
+
+        const jawOffset = (this.smoothState.rotation?.y || 0) * 12;
 
         this.ctx.beginPath();
-        // Chin
-        this.ctx.moveTo(0 + jawOffset, 140);
+        // Start top-left
+        this.ctx.moveTo(-85 + jawOffset, -100);
 
-        // Right Jaw
-        this.ctx.quadraticCurveTo(80 + jawOffset, 120, 95 + jawOffset, 0);
-        // Right Temple (straight up for oval shape)
-        this.ctx.lineTo(95 + jawOffset, -80);
+        // Top curve (Forehead)
+        this.ctx.quadraticCurveTo(jawOffset, -125, 85 + jawOffset, -100);
 
-        // Forehead (Rounded)
-        this.ctx.quadraticCurveTo(0 + jawOffset, -130, -95 + jawOffset, -80);
+        // Right side
+        this.ctx.lineTo(90 + jawOffset, 100);
 
-        // Left Temple
-        this.ctx.lineTo(-95 + jawOffset, 0);
+        // Chin/Jaw (Smooth, rounded)
+        this.ctx.quadraticCurveTo(90 + jawOffset, 145, 0 + jawOffset, 145); // Bottom Right to Bottom Center
+        this.ctx.quadraticCurveTo(-90 + jawOffset, 145, -90 + jawOffset, 100); // Bottom Center to Bottom Left
 
-        // Left Jaw
-        this.ctx.quadraticCurveTo(-80 + jawOffset, 120, 0 + jawOffset, 140);
+        // Left side
+        this.ctx.lineTo(-85 + jawOffset, -100);
 
         this.ctx.fill();
         this.ctx.stroke();
 
-        // Ears (simple)
-        this.ctx.fillStyle = this.colors.skin;
-        this.ctx.beginPath();
-        this.ctx.ellipse(-100 + jawOffset, 0, 15, 25, 0, 0, Math.PI * 2); // Left
-        this.ctx.ellipse(100 + jawOffset, 0, 15, 25, 0, 0, Math.PI * 2); // Right
-        this.ctx.fill();
-
         this.ctx.restore();
+
+        // Ears are drawn separately, behind or in front? Spec says "Proportional". 
+        // Logic invokes drawEars() separately in draw() loop which is fine.
     }
 
     private drawHair(rotation: { x: number; y: number; z: number }) {
@@ -339,42 +369,41 @@ export class AvatarRenderer {
 
         this.ctx.save();
         this.ctx.fillStyle = this.colors.hair;
-        const offset = rotation.y * 12;
-        const bounce = Math.sin(this.animationTime * 2) * 2;
+        this.ctx.strokeStyle = '#2A2A2A'; // Outline
+        this.ctx.lineWidth = 4;
 
-        if (this.style.hairStyle === 'quiff') {
-            // Modern Quiff (Default)
-            this.ctx.beginPath();
-            this.ctx.moveTo(-98 + offset, -30);
-            this.ctx.quadraticCurveTo(-110 + offset, -100, -60 + offset, -160 + bounce);
-            this.ctx.quadraticCurveTo(0 + offset, -180 + bounce, 80 + offset, -150 + bounce);
-            this.ctx.quadraticCurveTo(120 + offset, -100, 102 + offset, -30);
-            this.ctx.quadraticCurveTo(0 + offset, -60, -98 + offset, -30);
-            this.ctx.fill();
+        const offset = rotation.y * 14; // Hair moves a bit more
+        const bounce = Math.sin(this.animationTime * 3) * 3;
 
-            // Texture
-            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.moveTo(-60 + offset, -130);
-            this.ctx.quadraticCurveTo(0 + offset, -150, 60 + offset, -130);
-            this.ctx.stroke();
+        this.ctx.beginPath();
 
-        } else if (this.style.hairStyle === 'messy') {
-            // Messy / Bedhead
-            this.ctx.beginPath();
-            this.ctx.moveTo(-95 + offset, -30);
-            // Spikes
-            this.ctx.lineTo(-110 + offset, -90);
-            this.ctx.lineTo(-80 + offset, -130 + bounce);
-            this.ctx.lineTo(-40 + offset, -150 + bounce);
-            this.ctx.lineTo(0 + offset, -160 + bounce); // Top spike
-            this.ctx.lineTo(40 + offset, -145 + bounce);
-            this.ctx.lineTo(90 + offset, -120);
-            this.ctx.lineTo(105 + offset, -40);
-            this.ctx.quadraticCurveTo(0 + offset, -65, -95 + offset, -30);
-            this.ctx.fill();
-        }
+        // Hair Base (covers forehead)
+        this.ctx.moveTo(-95 + offset, -40); // Left temple
+
+        // Chunk 1 (Left Volume)
+        this.ctx.quadraticCurveTo(-110 + offset, -100, -60 + offset, -150 + bounce);
+
+        // Chunk 2 (Top Center - The Volume)
+        this.ctx.quadraticCurveTo(0 + offset, -180 + bounce, 50 + offset, -155 + bounce);
+
+        // Chunk 3 (Right Messy)
+        this.ctx.quadraticCurveTo(100 + offset, -130, 105 + offset, -40); // Right temple
+
+        // Hairline (Clean but stylish)
+        this.ctx.quadraticCurveTo(50 + offset, -60, 0 + offset, -50 + bounce * 0.5); // Center dip
+        this.ctx.quadraticCurveTo(-50 + offset, -60, -95 + offset, -40);
+
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Highlight (Soft band)
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        this.ctx.lineWidth = 6;
+        this.ctx.lineCap = 'round';
+        this.ctx.beginPath();
+        this.ctx.moveTo(-50 + offset, -120 + bounce);
+        this.ctx.quadraticCurveTo(0 + offset, -140 + bounce, 50 + offset, -120 + bounce);
+        this.ctx.stroke();
 
         this.ctx.restore();
     }
@@ -382,29 +411,36 @@ export class AvatarRenderer {
     private drawEars() {
         this.ctx.save();
         this.ctx.fillStyle = this.colors.skin;
-        this.ctx.strokeStyle = this.colors.hair;
-        this.ctx.lineWidth = 3;
+        this.ctx.strokeStyle = '#2A2A2A';
+        this.ctx.lineWidth = 4;
 
+        // Position: attached to the head sides (approx +/- 90)
         // Left ear
         this.ctx.beginPath();
-        this.ctx.ellipse(-130, 0, 20, 28, -0.2, 0, Math.PI * 2);
+        this.ctx.ellipse(-95, 0, 15, 22, -0.1, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
 
-        // Inner ear
+        // Inner left
         this.ctx.beginPath();
-        this.ctx.arc(-125, 0, 8, 0, Math.PI * 2);
+        this.ctx.strokeStyle = '#d0b090'; // Subtle detail
+        this.ctx.lineWidth = 2;
+        this.ctx.arc(-95, 2, 8, Math.PI / 2, Math.PI * 1.5, true);
         this.ctx.stroke();
 
         // Right ear
         this.ctx.beginPath();
-        this.ctx.ellipse(130, 0, 20, 28, 0.2, 0, Math.PI * 2);
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeStyle = '#2A2A2A';
+        this.ctx.ellipse(95, 0, 15, 22, 0.1, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
 
-        // Inner ear
+        // Inner right
         this.ctx.beginPath();
-        this.ctx.arc(125, 0, 8, 0, Math.PI * 2);
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = '#d0b090';
+        this.ctx.arc(95, 2, 8, Math.PI * 1.5, Math.PI / 2, true);
         this.ctx.stroke();
 
         this.ctx.restore();
@@ -421,58 +457,56 @@ export class AvatarRenderer {
     private drawSingleEye(x: number, y: number, openness: number, blink: boolean, rotation: any) {
         this.ctx.save();
 
-        // Medium sized, sharp eyes
-        const eyeWidth = 32;
-        const eyeHeightBase = 26; // Slightly almond aka slightly flattened
+        // Eyes: Medium-large, Circular/Soft Oval
+        const eyeSize = 38; // Increased size
 
-        if (blink || openness < 0.20) { // Higher threshold for more responsiveness
-            // Clean blink stroke
-            this.ctx.strokeStyle = this.colors.eyebrow; // Match brow color
-            this.ctx.lineWidth = 3;
+        if (blink || openness < 0.15) {
+            // Blink: Simple downward curve
+            this.ctx.strokeStyle = '#2A2A2A';
+            this.ctx.lineWidth = 4;
             this.ctx.lineCap = 'round';
             this.ctx.beginPath();
-            this.ctx.moveTo(x - eyeWidth * 0.9, y + 2);
-            this.ctx.quadraticCurveTo(x, y + 8, x + eyeWidth * 0.9, y + 2);
+            this.ctx.moveTo(x - 20, y + 5);
+            this.ctx.quadraticCurveTo(x, y + 12, x + 20, y + 5);
             this.ctx.stroke();
         } else {
-            // Eye shape (Almond / Alert)
+            // Eye Outline
             this.ctx.fillStyle = this.colors.eyeWhite;
-            this.ctx.strokeStyle = '#d0b090'; // Subtle skin outline
-            this.ctx.lineWidth = 2;
+            this.ctx.strokeStyle = '#2A2A2A';
+            this.ctx.lineWidth = 3;
 
-            const currentHeight = eyeHeightBase * Math.min(openness * 1.5, 1);
+            // Height varies with openness
+            const h = eyeSize * Math.min(openness * 1.2, 1);
 
             this.ctx.beginPath();
-            this.ctx.ellipse(x, y, eyeWidth, currentHeight, 0, 0, Math.PI * 2);
+            this.ctx.ellipse(x, y, eyeSize * 0.9, h, 0, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.stroke();
 
-            // Pupil (Sharp, Focused)
-            // Movement tracking
-            let pupilX = x + rotation.y * 12; // More responsive looking
-            let pupilY = y + rotation.x * 10;
+            // Eyelid crease (Slightly visible)
+            this.ctx.beginPath();
+            this.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            this.ctx.lineWidth = 2;
+            this.ctx.arc(x, y - h + 5, 20, Math.PI * 1.1, Math.PI * 1.9);
+            this.ctx.stroke();
 
-            // Constrain pupil to eye
-            const maxOffset = 10;
-            const pdx = pupilX - x;
-            const pdy = pupilY - y;
-            const dist = Math.sqrt(pdx * pdx + pdy * pdy);
-            if (dist > maxOffset) {
-                pupilX = x + (pdx / dist) * maxOffset;
-                pupilY = y + (pdy / dist) * maxOffset;
-            }
+            // Pupil: Black + White highlight
+            // Responsive tracking
+            const maxX = 12;
+            const maxY = 8;
+            const px = x + Math.max(-maxX, Math.min(maxX, rotation.y * 20));
+            const py = y + Math.max(-maxY, Math.min(maxY, rotation.x * 15));
 
-            const pupilSize = 10; // Smaller, alert pupil
-
+            // Pupil
             this.ctx.fillStyle = this.colors.eyePupil;
             this.ctx.beginPath();
-            this.ctx.arc(pupilX, pupilY, pupilSize, 0, Math.PI * 2);
+            this.ctx.arc(px, py, 12, 0, Math.PI * 2);
             this.ctx.fill();
 
-            // Highlight (Smart/Sharp reflection)
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            // Highlight (The "Life" dot)
+            this.ctx.fillStyle = '#FFFFFF';
             this.ctx.beginPath();
-            this.ctx.arc(pupilX - 3, pupilY - 3, 3, 0, Math.PI * 2);
+            this.ctx.arc(px + 4, py - 4, 3.5, 0, Math.PI * 2);
             this.ctx.fill();
         }
 
@@ -482,40 +516,42 @@ export class AvatarRenderer {
     private drawGlasses(offsetX: number, offsetY: number) {
         this.ctx.save();
         this.ctx.strokeStyle = this.colors.glassesFrame;
-        this.ctx.lineWidth = 3;
+        this.ctx.lineWidth = 4; // Distinct frame
         this.ctx.lineJoin = 'round';
         this.ctx.fillStyle = this.colors.glassesLens;
 
-        const frameWidth = 65;
-        const frameHeight = 45;
-        const bridgeWidth = 18;
-        const y = -35 + offsetY;
+        const frameWidth = 70;
+        const frameHeight = 50;
+        const bridgeWidth = 16;
+        const y = -38 + offsetY;
 
-        // Left Lens (Soft Rectangular)
+        // Left Lens (Rounded Rect)
         const lx = -frameWidth - bridgeWidth / 2 + offsetX;
-        this.drawSoftRect(lx, y, frameWidth, frameHeight, 8);
+        this.drawSoftRect(lx, y, frameWidth, frameHeight, 10);
         this.ctx.fill();
         this.ctx.stroke();
 
         // Right Lens
         const rx = bridgeWidth / 2 + offsetX;
-        this.drawSoftRect(rx, y, frameWidth, frameHeight, 8);
+        this.drawSoftRect(rx, y, frameWidth, frameHeight, 10);
         this.ctx.fill();
         this.ctx.stroke();
 
-        // Bridge
+        // Bridge (Simple Line)
         this.ctx.beginPath();
-        this.ctx.moveTo(lx + frameWidth, y + frameHeight / 2 - 5);
-        this.ctx.quadraticCurveTo(0 + offsetX, y + frameHeight / 2 - 12, rx, y + frameHeight / 2 - 5);
+        this.ctx.moveTo(lx + frameWidth, y + 15);
+        this.ctx.quadraticCurveTo(0 + offsetX, y + 10, rx, y + 15);
+        this.ctx.lineWidth = 3;
         this.ctx.stroke();
 
-        // Screen Reflection (Tech Vibe)
-        this.ctx.fillStyle = 'rgba(100, 200, 255, 0.15)';
+        // Diagonal Shine (Tech Feel)
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
         this.ctx.beginPath();
+        // Shine on left lens
         this.ctx.moveTo(lx + 10, y + 10);
         this.ctx.lineTo(lx + 25, y + 10);
-        this.ctx.lineTo(lx + 15, y + frameHeight - 10);
-        this.ctx.lineTo(lx, y + frameHeight - 10);
+        this.ctx.lineTo(lx + 15, y + 30);
+        this.ctx.lineTo(lx, y + 30);
         this.ctx.fill();
 
         this.ctx.restore();
@@ -538,38 +574,55 @@ export class AvatarRenderer {
     private drawEyebrows(offsetX: number, offsetY: number, eyebrows: { left: number; right: number } | undefined) {
         this.ctx.save();
         this.ctx.strokeStyle = this.colors.eyebrow;
-        this.ctx.lineWidth = 4;
+        this.ctx.lineWidth = 6;
         this.ctx.lineCap = 'round';
 
+        const emotion = (this.smoothState as any).emotion || 'neutral';
+
         // Base positions
-        const baseY = -55 + offsetY;
-        const spacing = 25;
-        const browWidth = 35;
+        const baseY = -65 + offsetY;
+        const spacing = 32;
+        const browWidth = 40;
 
-        // Get raised amount from tracking
-        const leftRaised = eyebrows ? eyebrows.left * 1.5 : 0;
-        const rightRaised = eyebrows ? eyebrows.right * 1.5 : 0;
+        let leftRaised = eyebrows ? eyebrows.left * 25 : 0;
+        let rightRaised = eyebrows ? eyebrows.right * 25 : 0;
 
-        // Left Brow (Sarcastic Arch potential)
+        // Emotion Modifiers
+        let lAngle = 0;
+        let rAngle = 0;
+
+        if (emotion === 'happy') {
+            leftRaised += 5; rightRaised += 5; // Raised happy brows
+        } else if (emotion === 'sad') {
+            // Angle inner up
+            lAngle = -5; rAngle = -5;
+            leftRaised -= 5; rightRaised -= 5;
+        } else if (emotion === 'surprised') {
+            leftRaised += 15; rightRaised += 15;
+        } else if (emotion === 'thinking') {
+            leftRaised -= 5; rightRaised += 5; // Asymmetric
+            lAngle = 5; rAngle = -2;
+        }
+
+        // Left Brow
         this.ctx.beginPath();
-        this.ctx.moveTo(-spacing - browWidth + offsetX, baseY - leftRaised);
-        // Arch point
+        this.ctx.moveTo(-spacing - browWidth + offsetX, baseY - leftRaised + 5 - lAngle);
         this.ctx.quadraticCurveTo(
             -spacing - browWidth / 2 + offsetX,
-            baseY - 10 - leftRaised,
+            baseY - leftRaised - 5,
             -spacing + offsetX,
-            baseY - leftRaised + 5
+            baseY - leftRaised + lAngle
         );
         this.ctx.stroke();
 
         // Right Brow
         this.ctx.beginPath();
-        this.ctx.moveTo(spacing + offsetX, baseY - rightRaised + 5);
+        this.ctx.moveTo(spacing + offsetX, baseY - rightRaised + rAngle);
         this.ctx.quadraticCurveTo(
             spacing + browWidth / 2 + offsetX,
-            baseY - 10 - rightRaised,
+            baseY - rightRaised - 5,
             spacing + browWidth + offsetX,
-            baseY - rightRaised
+            baseY - rightRaised + 5 - rAngle
         );
         this.ctx.stroke();
 
@@ -578,16 +631,19 @@ export class AvatarRenderer {
 
     private drawNose(offsetX: number, offsetY: number) {
         this.ctx.save();
-        this.ctx.strokeStyle = '#d0b090'; // More visible nose
+        this.ctx.strokeStyle = '#d0b090'; // Subtle
         this.ctx.lineWidth = 3;
         this.ctx.lineCap = 'round';
 
         this.ctx.beginPath();
-        // Angular simple nose
-        this.ctx.moveTo(-5 + offsetX, 15 + offsetY);
-        this.ctx.lineTo(0 + offsetX, 30 + offsetY);
-        this.ctx.lineTo(12 + offsetX, 25 + offsetY);
+        // Minimalist curved nose
+        // Just a small 'c' or dot curve
+        const nx = 0 + offsetX;
+        const ny = 25 + offsetY;
+
+        this.ctx.arc(nx, ny, 6, 0.1, Math.PI - 0.5, false);
         this.ctx.stroke();
+
         this.ctx.restore();
     }
 
@@ -597,7 +653,7 @@ export class AvatarRenderer {
         this.ctx.strokeStyle = '#2d3436'; // Dark frame
         this.ctx.lineWidth = 3;
 
-        const headWidth = 200; // Approx width of head
+
         const earOffset = 100;
         const rotOffset = rotation.y * 110; // Parallax for 3D effect
 
@@ -720,11 +776,11 @@ export class AvatarRenderer {
         this.ctx.restore();
     }
 
-    // REST - lips closed, relaxed
+    // REST - lips closed, relaxed (Slight smile)
     private drawVisemeRest(x: number, y: number) {
         this.ctx.beginPath();
-        this.ctx.moveTo(x - 25, y);
-        this.ctx.lineTo(x + 25, y);
+        this.ctx.moveTo(x - 22, y - 2);
+        this.ctx.quadraticCurveTo(x, y + 3, x + 22, y - 2); // Gentle smile curve
         this.ctx.stroke();
     }
 
@@ -793,7 +849,7 @@ export class AvatarRenderer {
     }
 
     // FV - f, v - teeth touch lower lip
-    private drawVisemeFV(x: number, y: number, intensity: number) {
+    private drawVisemeFV(x: number, y: number, _intensity: number) {
         // Upper teeth showing
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.fillRect(x - 20, y - 8, 40, 6);
@@ -813,16 +869,17 @@ export class AvatarRenderer {
 
         // Pressed together lip line (thicker)
         this.ctx.strokeStyle = this.colors.mouth;
-        this.ctx.lineWidth = 6 + pressure;
+        this.ctx.lineWidth = 5 + pressure;
         this.ctx.beginPath();
-        this.ctx.moveTo(x - 26, y);
-        this.ctx.lineTo(x + 26, y);
+        this.ctx.moveTo(x - 24, y);
+        this.ctx.quadraticCurveTo(x, y + 2, x + 24, y);
         this.ctx.stroke();
     }
 
-    // Fallback simple mouth (for when no viseme data)
+    // Fallback simple mouth
     private drawMouth(offsetX: number, offsetY: number, openness: number) {
         this.ctx.save();
+        const emotion = (this.smoothState as any).emotion || 'neutral';
 
         const mouthY = 80 + offsetY;
 
@@ -831,43 +888,40 @@ export class AvatarRenderer {
         this.ctx.lineWidth = 4;
         this.ctx.lineCap = 'round';
 
+        let curveY = 3; // Default smile
+        if (emotion === 'sad') curveY = -5; // Frown
+        if (emotion === 'happy') curveY = 8; // Big smile
+        if (emotion === 'surprised') curveY = 0; // O shape
+
         if (openness < 0.08) {
+            // Closed line
             this.ctx.beginPath();
-            this.ctx.moveTo(-25 + offsetX, mouthY);
-            this.ctx.lineTo(25 + offsetX, mouthY);
+            this.ctx.moveTo(-22 + offsetX, mouthY - 2 + (emotion === 'sad' ? 5 : 0));
+            this.ctx.quadraticCurveTo(0 + offsetX, mouthY + curveY, 22 + offsetX, mouthY - 2 + (emotion === 'sad' ? 5 : 0));
             this.ctx.stroke();
         } else if (openness < 0.2) {
+            // Half open
             this.ctx.beginPath();
             this.ctx.moveTo(-28 + offsetX, mouthY - 2);
-            this.ctx.quadraticCurveTo(offsetX, mouthY + 8, 28 + offsetX, mouthY - 2);
+            this.ctx.quadraticCurveTo(offsetX, mouthY + 8 + curveY, 28 + offsetX, mouthY - 2);
             this.ctx.stroke();
         } else {
-            this.ctx.fillStyle = '#3a2a2a';
+            // Open
+            // ... (keep existing open logic but maybe affected by emotion? Open is open.)
             this.ctx.beginPath();
-            const width = 30;
-            const height = Math.min(openness * 50, 35);
-            this.ctx.ellipse(offsetX, mouthY + 5, width, height, 0, 0, Math.PI * 2);
+            const w = 30;
+            const h = openness * 60;
+            this.ctx.ellipse(offsetX, mouthY + h / 3, w, h / 2, 0, 0, Math.PI * 2);
+            this.ctx.fillStyle = '#4A3A3A';
             this.ctx.fill();
-            this.ctx.stroke();
 
-            if (height > 15) {
-                this.ctx.strokeStyle = '#FFFFFF';
-                this.ctx.lineWidth = 3;
-                this.ctx.beginPath();
-                this.ctx.moveTo(offsetX - 18, mouthY - height + 8);
-                this.ctx.lineTo(offsetX + 18, mouthY - height + 8);
-                this.ctx.stroke();
-            }
+            // Tongue
+            this.ctx.fillStyle = '#D47060';
+            this.ctx.beginPath();
+            this.ctx.arc(offsetX, mouthY + h / 1.5, 15, Math.PI, 0);
+            this.ctx.fill();
         }
 
         this.ctx.restore();
-    }
-
-    private adjustColor(color: string, amount: number): string {
-        const hex = color.replace('#', '');
-        const r = Math.max(0, Math.min(255, parseInt(hex.substr(0, 2), 16) + amount));
-        const g = Math.max(0, Math.min(255, parseInt(hex.substr(2, 2), 16) + amount));
-        const b = Math.max(0, Math.min(255, parseInt(hex.substr(4, 2), 16) + amount));
-        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     }
 }

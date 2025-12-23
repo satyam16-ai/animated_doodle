@@ -9,6 +9,7 @@ export interface FaceState {
     eyes: { leftOpen: number; rightOpen: number; blink: boolean };
     eyebrows?: { left: number; right: number }; // Optional for backwards compatibility
     position: { x: number; y: number };
+    emotion: 'neutral' | 'happy' | 'sad' | 'surprised' | 'thinking';
 }
 
 export class FaceTracker {
@@ -49,7 +50,7 @@ export class FaceTracker {
         this.faceMesh.onResults(this.onResults.bind(this));
     }
 
-    async start() {
+    async start(_deviceId?: string) {
         this.camera = new Camera(this.videoElement, {
             onFrame: async () => {
                 await this.faceMesh.send({ image: this.videoElement });
@@ -146,8 +147,6 @@ export class FaceTracker {
         const leftOpenness = getEyeOpenness(159, 145, 33, 133);
         const rightOpenness = getEyeOpenness(386, 374, 362, 263);
 
-        // Increased threshold for better blink detection (was 0.05)
-        // Normal open eye is ~0.3. Blinking is ~0.05-0.15.
         const blinkThreshold = 0.20;
         const isBlinking = leftOpenness < blinkThreshold && rightOpenness < blinkThreshold;
 
@@ -158,16 +157,42 @@ export class FaceTracker {
         };
 
         // Eyebrow calculation (avg y of brow vs top of eye)
-        // Left Brow (65) vs Left Eye Top (159)
-        // Right Brow (295) vs Right Eye Top (386)
-        // Normal distance is ~0.05. Higher distance = raised.
         const leftBrowY = landmarks[65].y;
         const leftEyeTopY = landmarks[159].y;
         const rightBrowY = landmarks[295].y;
         const rightEyeTopY = landmarks[386].y;
 
-        const leftBrowRaised = Math.max(0, (leftEyeTopY - leftBrowY) * 10); // Scale for usability
+        const leftBrowRaised = Math.max(0, (leftEyeTopY - leftBrowY) * 10);
         const rightBrowRaised = Math.max(0, (rightEyeTopY - rightBrowY) * 10);
+
+        // --- Emotion Detection ---
+        let emotion: FaceState['emotion'] = 'neutral';
+
+        const mouthCornerLeft = landmarks[61];
+        const mouthCornerRight = landmarks[291];
+        const mouthCenterY = (upperLip_y + lowerLip_y) / 2;
+        const mouthCornerY = (mouthCornerLeft.y + mouthCornerRight.y) / 2;
+
+        // Smile detection
+        const smileThreshold = 0.01;
+        if (mouthCenterY - mouthCornerY > smileThreshold) {
+            emotion = 'happy';
+        }
+
+        // Sad detection
+        if (mouthCornerY - mouthCenterY > 0.015) {
+            emotion = 'sad';
+        }
+
+        // Surprise
+        if (openness > 0.3 && (leftBrowRaised > 0.3 || rightBrowRaised > 0.3)) {
+            emotion = 'surprised';
+        }
+
+        // Thinking (Tilt + Side gaze?)
+        if (Math.abs(roll) > 0.35) {
+            emotion = 'thinking';
+        }
 
         this.onStateChange({
             rotation: { x: pitch, y: yaw, z: roll },
@@ -176,8 +201,9 @@ export class FaceTracker {
                 shape: openness > 0.25 ? 'open' : openness > 0.12 ? 'half' : 'closed'
             },
             eyes: { leftOpen: leftOpenness, rightOpen: rightOpenness, blink: isBlinking },
-            eyebrows: { left: leftBrowRaised, right: rightBrowRaised }, // New eyebrow data
-            position
+            eyebrows: { left: leftBrowRaised, right: rightBrowRaised },
+            position,
+            emotion
         });
     }
 }

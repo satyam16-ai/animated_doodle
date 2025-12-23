@@ -8,7 +8,8 @@ export interface AvatarState {
     eyes: { leftOpen: number; rightOpen: number; blink: boolean };
     position: { x: number; y: number };
     eyebrows?: { left: number; right: number };
-    viseme?: VisemeState; // NEW: Advanced lip sync data
+    viseme?: VisemeState;
+    emotion: 'neutral' | 'happy' | 'sad' | 'surprised' | 'thinking';
 }
 
 import { SpeechIntegrator } from './SpeechIntegrator';
@@ -18,7 +19,8 @@ export class AvatarStateEngine {
         rotation: { x: 0, y: 0, z: 0 },
         mouth: { openness: 0, shape: 'closed' },
         eyes: { leftOpen: 1, rightOpen: 1, blink: false },
-        position: { x: 0.5, y: 0.5 }
+        position: { x: 0.5, y: 0.5 },
+        emotion: 'neutral'
     };
 
     private audioAnalyzer: AudioAnalyzer | null = null;

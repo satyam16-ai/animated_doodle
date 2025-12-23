@@ -66,7 +66,7 @@ export class FaceAnalyzer {
         const hairInfo = this.detectHair(data, width, height, colors.hairColor);
 
         // Detect facial hair
-        const facialHair = this.detectFacialHair(data, width, height, landmarks);
+        const facialHair = this.detectFacialHair(data, width, height);
 
         return {
             ...colors,
@@ -187,7 +187,7 @@ export class FaceAnalyzer {
         const rightEar = landmarks[454];
         const chin = landmarks[152];
         const forehead = landmarks[10];
-        const nose = landmarks[1];
+        // const nose = landmarks[1];
 
         // Face dimensions
         const faceWidth = Math.abs(rightEar.x - leftEar.x);
@@ -231,7 +231,7 @@ export class FaceAnalyzer {
 
         // Eyebrows
         const leftBrowInner = landmarks[17];
-        const leftBrowOuter = landmarks[8];
+        // const leftBrowOuter = landmarks[8];
         const leftBrowTop = landmarks[105];
         const leftBrowBottom = landmarks[55];
         const eyebrowThickness = (Math.abs(leftBrowTop.y - leftBrowBottom.y) / faceHeight) * 20;
@@ -324,7 +324,7 @@ export class FaceAnalyzer {
         };
     }
 
-    private detectFacialHair(data: Uint8ClampedArray, width: number, height: number, landmarks?: NormalizedLandmarkList): any {
+    private detectFacialHair(data: Uint8ClampedArray, width: number, height: number): any {
         // Sample chin and upper lip area for facial hair
         let darkPixels = 0;
         let totalPixels = 0;

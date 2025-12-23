@@ -15,7 +15,7 @@ export class SpeechIntegrator {
                 console.log('🎤 Speech Recognition Started');
             };
 
-            this.recognition.onresult = (event: any) => {
+            this.recognition.onresult = (_event: any) => {
                 this.isSpeaking = true;
                 this.lastSpeechTime = Date.now();
                 // We could use event.results[0][0].transcript for advanced phoneme mapping later

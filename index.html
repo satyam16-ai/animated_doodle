@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- We relax CSP for dev/wasm; unsafe-eval is typically needed for some wasm/bundler logic -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net ws://localhost:*;">
+        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net ws://localhost:* blob:;">
     <title>Munna Monitor</title>
 </head>
 
@@ -39,6 +39,16 @@
                         <option value="1280x720">720p (HD)</option>
                         <option value="1920x1080" selected>1080p (Full HD)</option>
                         <option value="2560x1440">1440p (2K)</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label>Aspect Ratio</label>
+                    <select id="aspect-ratio-select">
+                        <option value="16:9" selected>16:9 (YouTube, Landscape)</option>
+                        <option value="9:16">9:16 (Reels, TikTok, Shorts)</option>
+                        <option value="1:1">1:1 (Square, Instagram)</option>
+                        <option value="4:3">4:3 (Classic)</option>
+                        <option value="21:9">21:9 (Ultrawide)</option>
                     </select>
                 </div>
                 <div class="control-item">
@@ -92,19 +102,52 @@
                 </div>
             </div>
 
+            <!-- AVATAR MODE SELECTOR -->
             <div class="settings-group">
-                <h3>🎨 Environment</h3>
-                <div class="control-item">
-                    <label>Background</label>
-                    <select id="background-select">
-                        <option value="gradient" selected>Gradient (Purple)</option>
-                        <option value="solid-dark">Solid Dark</option>
-                        <option value="solid-light">Solid Light</option>
-                        <option value="green">Green Screen</option>
-                        <option value="blue">Blue Screen</option>
-                    </select>
+                <h3>🎭 Avatar Mode</h3>
+                <div class="mode-selector">
+                    <label class="mode-option">
+                        <input type="radio" name="avatar-mode" value="2d" checked>
+                        <span>2D Doodle</span>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="avatar-mode" value="3d">
+                        <span>3D Model</span>
+                    </label>
                 </div>
             </div>
+
+            <!-- 3D MODEL IMPORT (shown only in 3D mode) -->
+            <div class="settings-group" id="model-import-section" style="display: none;">
+                <h3>📦 3D Model</h3>
+                <button id="import-3d-btn" class="import-btn">
+                    📥 Import Model
+                </button>
+                <input type="file" id="model-file-input" accept=".glb,.gltf,.fbx,.obj" style="display: none;">
+                <div id="model-status" class="model-status">No model loaded</div>
+                <div id="face-detection-status" class="detection-status" style="display: none;"></div>
+            </div>
+
+            <!-- 3D CONTROLS (shown only in 3D mode) -->
+            <div class="settings-group" id="3d-controls-section" style="display: none;">
+                <h3>🎮 3D Controls</h3>
+                <div class="control-item">
+                    <label>Camera Distance</label>
+                    <input type="range" id="camera-distance" min="1" max="5" step="0.1" value="2">
+                    <span class="range-value">2.0</span>
+                </div>
+                <div class="control-item">
+                    <label>Light Intensity</label>
+                    <input type="range" id="light-intensity" min="0" max="2" step="0.1" value="1">
+                    <span class="range-value">1.0</span>
+                </div>
+                <div class="control-item">
+                    <label>Model Scale</label>
+                    <input type="range" id="model-scale" min="0.5" max="3" step="0.1" value="1">
+                    <span class="range-value">1.0</span>
+                </div>
+            </div>
+
 
             <div class="settings-group debug-stats">
                 <h3>📊 Live Statistics</h3>
@@ -128,6 +171,7 @@
         <!-- Main Stage: Avatar & Preview -->
         <main id="studio-stage">
             <canvas id="output-canvas"></canvas>
+            <canvas id="output-canvas-3d" style="display: none;"></canvas>
 
             <!-- Floating Webcam Preview -->
             <div id="preview-container">
